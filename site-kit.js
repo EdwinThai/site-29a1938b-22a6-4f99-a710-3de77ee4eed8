@@ -164,9 +164,15 @@
   function wirePriceMenu() {
     var roots = document.querySelectorAll(".menu-groups");
     Array.prototype.forEach.call(roots, function (root, rootIdx) {
-      if (root.classList.contains("pm-enhanced")) return;
+      if (root.classList.contains("pm-enhanced") || root.classList.contains("pm-open")) return;
       var groups = Array.prototype.filter.call(root.children, function (el) { return el.classList.contains("menu-group"); });
       if (groups.length < 2) return;
+      // The design library's pick (config/designLibrary.ts). A side menu beside too few rows looks empty (Salong Storgatan
+      // 50, 2026-11-02), so it becomes tabs, where the rows sit under the menu. The open "columns"/"stack" lists of
+      // 2026-11-02 were rejected the next day (Salong Stella), so a site built with one shows tabs too.
+      var layout = root.getAttribute("data-price-layout");
+      var fewest = Math.min.apply(null, groups.map(function (g) { return g.querySelectorAll(".price-item:not(.service-variant)").length; }));
+      if (layout === "columns" || layout === "stack" || (layout !== "tabs" && fewest < groups.length - 1)) layout = "tabs";
       var unit = (root.getAttribute("data-item-label") || "behandling|behandlingar").split("|");
 
       var menu = document.createElement("div");
@@ -225,10 +231,8 @@
       root.appendChild(menu);
       root.appendChild(list);
       root.classList.add("pm-enhanced");
-      // The design library's pick (config/designLibrary.ts): "tabs" (#1, a
-      // row of tabs above the list), "tint" (2B, side menu with a soft tint
-      // behind the chosen category) or "list" (2C, the default).
-      var layout = root.getAttribute("data-price-layout");
+      // "tabs" (#1, a row of tabs above the list), "tint" (2B, side menu with a
+      // soft tint behind the chosen category) or "list" (2C, the default).
       root.classList.add(layout === "tabs" ? "pm-tabs" : layout === "tint" ? "pm-tint" : "pm-plain");
 
       function select(tab, focus) {
@@ -259,10 +263,8 @@
   }
 
   /**
-   * Opening hours (2026-10-02, config/hoursLayout.ts): marks today's row in
-   * every .hours-list (not on a placeholder list, whose times are examples),
-   * and for data-layout="split" regroups the seven rows into two columns,
-   * Vardagar and Helg, from the ordinary list the model wrote.
+   * Opening hours (config/hoursLayout.ts): marks today's row in every
+   * .hours-list (not on a placeholder list, whose times are examples).
    */
   var DAY_PREFIX = ["sön", "mån", "tis", "ons", "tor", "fre", "lör"];
   function wireHoursList() {
@@ -283,72 +285,31 @@
           li.querySelector(".hd-day").appendChild(tag);
         });
       }
-      if (list.getAttribute("data-layout") !== "split" || rows.length !== 7) return;
-      var wrap = document.createElement("div");
-      wrap.className = "hours-split";
-      [["Vardagar", function (p) { return p !== "lör" && p !== "sön"; }], ["Helg", function (p) { return p === "lör" || p === "sön"; }]].forEach(function (g) {
-        var col = document.createElement("div");
-        col.className = "hours-col";
-        var label = document.createElement("span");
-        label.className = "hours-col-label";
-        label.textContent = g[0];
-        var ul = list.cloneNode(false);
-        ul.removeAttribute("data-layout");
-        rows.filter(function (li) { return g[1](prefixOf(li)); }).forEach(function (li) { ul.appendChild(li); });
-        col.appendChild(label);
-        col.appendChild(ul);
-        wrap.appendChild(col);
-      });
-      list.parentNode.replaceChild(wrap, list);
     });
   }
 
   /**
    * Reviews block (2026-10-02, config/reviewsSection.ts): long verbatim
    * quotes are clamped with a "Läs mer" toggle (the full text is always in
-   * the page), and the sideways row gets its arrows, hidden when everything
-   * already fits. Only the "rolling" row (Axel R4) moves by itself.
+   * the page), and a site built with an old sideways row shows columns.
    */
   function wireReviewsBlock() {
     var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     Array.prototype.forEach.call(document.querySelectorAll(".reviews-block"), function (block) {
-      // "One at a time" (#2): all quotes share one grid cell so the height
-      // never jumps; without JS they simply stay listed under each other.
-      var carousel = block.querySelector(".rv-carousel");
-      if (carousel) {
-        var slides = carousel.querySelectorAll(".rv-item");
-        var counter = carousel.querySelector(".rv-count");
-        var current = 0;
-        var show = function (n) {
-          current = (n + slides.length) % slides.length;
-          Array.prototype.forEach.call(slides, function (it, i) {
-            it.classList.toggle("is-on", i === current);
-            it.setAttribute("aria-hidden", String(i !== current));
-          });
-          if (counter) counter.textContent = current + 1 + " / " + slides.length;
-        };
-        carousel.classList.add("is-ready");
-        show(0);
-        // Fades only between quotes, never on load (the others would
-        // otherwise flash on top of the first while fading out).
-        requestAnimationFrame(function () { requestAnimationFrame(function () { carousel.classList.add("is-animated"); }); });
-        carousel.querySelector(".rv-prev").addEventListener("click", function () { show(current - 1); });
-        carousel.querySelector(".rv-next").addEventListener("click", function () { show(current + 1); });
-      }
-      // "Rolling" (Axel R4, 2026-10-04): a second copy of the quotes makes the
-      // loop seamless; the copy is hidden from screen readers. It stands still
-      // under prefers-reduced-motion (then it is a plain scrollable row).
-      var roll = block.querySelector(".rv-roll");
-      if (roll && !roll.classList.contains("is-rolling")) {
-        var rtrack = roll.querySelector(".rv-roll-track");
-        Array.prototype.slice.call(rtrack.children).forEach(function (it) {
-          var copy = it.cloneNode(true);
-          copy.setAttribute("aria-hidden", "true");
-          copy.classList.add("is-copy");
-          rtrack.appendChild(copy);
-        });
-        rtrack.style.setProperty("--rv-roll-time", Math.max(40, (rtrack.children.length / 2) * 16) + "s");
-        if (!reduce) roll.classList.add("is-rolling");
+      // The rows that move sideways are gone from the library (Edwin 2026-11-02). A site already built with one
+      // shows its first three quotes as columns, without waiting for a rebuild.
+      var sideways = block.querySelector(".rv-marquee, .rv-track, .rv-roll");
+      if (sideways) {
+        var quotes = Array.prototype.slice.call(sideways.querySelectorAll(".rv-item")).slice(0, 3);
+        var cols = document.createElement("div");
+        cols.className = "rv-cols";
+        cols.style.setProperty("--rv-cols", String(quotes.length));
+        quotes.forEach(function (it) { cols.appendChild(it); });
+        sideways.parentNode.replaceChild(cols, sideways);
+        block.classList.remove("is-marquee", "is-scroll");
+        block.classList.add("is-columns");
+        var oldArrows = block.querySelector(".rv-arrows");
+        if (oldArrows) oldArrows.parentNode.removeChild(oldArrows);
       }
       Array.prototype.forEach.call(block.querySelectorAll(".rv-item blockquote"), function (q) {
         if (q.scrollHeight - q.clientHeight <= 4 || q.nextElementSibling && q.nextElementSibling.classList.contains("rv-more")) return;
@@ -364,50 +325,52 @@
         });
         q.parentNode.insertBefore(btn, q.nextSibling);
       });
-      var track = block.querySelector(".rv-track");
-      var arrows = block.querySelector(".rv-arrows");
-      if (!track || !arrows) return;
-      var step = function (dir) {
-        var first = track.querySelector(".rv-item");
-        var w = first ? first.getBoundingClientRect().width : track.clientWidth;
-        track.scrollBy({ left: dir * w, behavior: reduce ? "auto" : "smooth" });
-      };
-      block.querySelector(".rv-prev").addEventListener("click", function () { step(-1); });
-      block.querySelector(".rv-next").addEventListener("click", function () { step(1); });
-      var sync = function () { arrows.style.visibility = track.scrollWidth <= track.clientWidth + 2 ? "hidden" : ""; };
-      sync();
-      window.addEventListener("resize", sync);
     });
   }
 
   /**
-   * Vanliga frågor as a menu (Axel F5, config/faqSection.ts): the questions
-   * on the left, one answer large beside them. Without JS every answer stays
-   * visible under the menu.
+   * FAQ "menu" layout (F5, design review 2026-10-04): the questions become a
+   * menu and the chosen answer is shown large beside it. The <details>
+   * accordion in the page stays as the no-JS fallback (and is hidden once
+   * this has run).
    */
   function wireFaqMenu() {
-    Array.prototype.forEach.call(document.querySelectorAll(".faq-menu-wrap"), function (wrap) {
-      var tabs = wrap.querySelectorAll(".faq-tab");
-      var answers = wrap.querySelectorAll(".faq-answer");
-      var show = function (i) {
-        Array.prototype.forEach.call(tabs, function (t, k) {
-          t.setAttribute("aria-selected", String(k === i));
-          t.tabIndex = k === i ? 0 : -1;
-        });
-        Array.prototype.forEach.call(answers, function (a, k) { a.hidden = k !== i; });
-      };
-      Array.prototype.forEach.call(tabs, function (t, k) {
-        t.addEventListener("click", function () { show(k); });
-        t.addEventListener("keydown", function (e) {
-          if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
-          e.preventDefault();
-          var n = (k + (e.key === "ArrowDown" ? 1 : -1) + tabs.length) % tabs.length;
-          show(n);
-          tabs[n].focus();
-        });
+    Array.prototype.forEach.call(document.querySelectorAll(".faq-block.is-menu"), function (block) {
+      var list = block.querySelector(".faq-list");
+      var items = list ? Array.prototype.slice.call(list.querySelectorAll(".faq-item")) : [];
+      if (items.length < 2) return;
+      var body = document.createElement("div");
+      body.className = "faq-body";
+      var menu = document.createElement("div");
+      menu.className = "faq-menu";
+      menu.setAttribute("role", "tablist");
+      var panel = document.createElement("div");
+      panel.className = "faq-panel";
+      panel.setAttribute("role", "tabpanel");
+      var buttons = items.map(function (d, i) {
+        var b = document.createElement("button");
+        b.type = "button";
+        b.setAttribute("role", "tab");
+        b.textContent = d.querySelector("summary").textContent;
+        b.addEventListener("click", function () { select(i); });
+        menu.appendChild(b);
+        return b;
       });
-      show(0);
-      requestAnimationFrame(function () { wrap.classList.add("is-ready"); });
+      function select(i) {
+        buttons.forEach(function (b, k) { b.setAttribute("aria-selected", String(k === i)); });
+        panel.textContent = "";
+        var h = document.createElement("h3");
+        h.textContent = items[i].querySelector("summary").textContent;
+        var p = document.createElement("p");
+        p.textContent = items[i].querySelector("p").textContent;
+        panel.appendChild(h);
+        panel.appendChild(p);
+      }
+      body.appendChild(menu);
+      body.appendChild(panel);
+      block.appendChild(body);
+      block.classList.add("is-ready");
+      select(0);
     });
   }
 
@@ -2329,6 +2292,16 @@
       err.hidden = true;
       form.appendChild(err);
       body.appendChild(form);
+      // Told where the details are asked for (GDPR, 2026-11-02). A plain line, not a box to tick: they're needed to book.
+      if (apiBase) {
+        var privacy = mk("p", "bf-privacy", "Salongen sparar dina uppgifter för att hantera bokningen. ");
+        var privacyLink = mk("a", null, "Så hanteras dina uppgifter");
+        privacyLink.href = apiBase.replace(/\/$/, "") + "/bookings/" + encodeURIComponent(companyId) + "/integritet";
+        privacyLink.target = "_blank";
+        privacyLink.rel = "noopener";
+        privacy.appendChild(privacyLink);
+        body.appendChild(privacy);
+      }
       var phone = wirePhoneInput(tel);
       [first, last, mail, tel].forEach(function (i) { i.addEventListener("input", function () { if (i.hasAttribute("aria-invalid")) showErr(""); }); });
       if (state.contact) { first.value = state.contact.first; last.value = state.contact.last; mail.value = state.contact.email || ""; msg.value = state.contact.msg; }
@@ -2492,60 +2465,6 @@
 
   var WEEKDAY_SHORT = ["Sön", "Mån", "Tis", "Ons", "Tors", "Fre", "Lör"];
 
-  /**
-   * "Nästa lediga tid" — the one honest scarcity/urgency signal this
-   * system allows (2026-09-17): real availability computed from the
-   * company's actual staff schedules + real bookings (same endpoint the
-   * booking widget itself uses for "nästa tillgängliga frisör"), never a
-   * fabricated countdown. If the real answer is "plenty of room", it just
-   * says the real next slot — it doesn't lie in either direction. Fails
-   * silently (element stays hidden) on any network/API error, same
-   * philosophy as every other optional site-kit widget.
-   */
-  function formatNextAvailable(dateIso, timeHm) {
-    var today = new Date();
-    var todayIso = today.getFullYear() + "-" + String(today.getMonth() + 1).padStart(2, "0") + "-" + String(today.getDate()).padStart(2, "0");
-    var tomorrow = new Date(today.getTime() + 86400000);
-    var tomorrowIso = tomorrow.getFullYear() + "-" + String(tomorrow.getMonth() + 1).padStart(2, "0") + "-" + String(tomorrow.getDate()).padStart(2, "0");
-    if (dateIso === todayIso) return "Idag kl " + timeHm;
-    if (dateIso === tomorrowIso) return "Imorgon kl " + timeHm;
-    var d = new Date(dateIso + "T00:00:00");
-    return WEEKDAY_SHORT[d.getDay()] + " " + d.getDate() + "/" + (d.getMonth() + 1) + " kl " + timeHm;
-  }
-
-  function wireNextAvailable() {
-    document.querySelectorAll(".next-available-note").forEach(function (el) {
-      var isLive = el.getAttribute("data-live") === "true";
-      if (!isLive) {
-        var d = new Date();
-        for (var i = 0; i < 8; i++) {
-          var dateStr = isoDate(d);
-          var slots = demoSlotsForDate(dateStr);
-          if (slots.length > 0) {
-            el.textContent = "Nästa lediga tid: " + formatNextAvailable(dateStr, slots[0]);
-            el.hidden = false;
-            return;
-          }
-          d.setDate(d.getDate() + 1);
-        }
-        el.hidden = true;
-        return;
-      }
-      var companyId = el.getAttribute("data-company-id");
-      var apiBase = el.getAttribute("data-api-base") || "";
-      var duration = el.getAttribute("data-duration-minutes") || "30";
-      if (!companyId) return;
-      fetch(apiBase + "/bookings/" + companyId + "/next-available?durationMinutes=" + duration)
-        .then(function (r) { return r.ok ? r.json() : null; })
-        .then(function (next) {
-          if (!next || !next.date || !next.time) { el.hidden = true; return; }
-          el.textContent = "Nästa lediga tid: " + formatNextAvailable(next.date, next.time);
-          el.hidden = false;
-        })
-        .catch(function () { el.hidden = true; });
-    });
-  }
-
   // Hero intro (2026-10-01): builds the standard name-driven hero animation
   // from ONE bare tag — `<h1 class="hero-intro" data-effect="lockup"
   // data-above="Hårsalong · Östermalm" data-below="Sedan 2011">Namn</h1>` —
@@ -2569,7 +2488,29 @@
       }
     });
     if (cur) out.push(cur);
-    return out;
+    // Same number of lines, but evened out: "ANNIKAS KLIPPERIA / AB" reads as "ANNIKAS / KLIPPERIA AB".
+    var words = str.split(" ").filter(Boolean);
+    var n = out.length;
+    if (n < 2 || n > 3 || words.length < n + 1) return out;
+    var join = function (from, to) { return words.slice(from, to).join(" "); };
+    var best = null;
+    var bestLongest = Infinity;
+    for (var i = 1; i < words.length; i++) {
+      var parts = n === 2 ? [[0, i], [i, words.length]] : null;
+      if (n === 3) {
+        for (var j = i + 1; j < words.length; j++) {
+          var p3 = [[0, i], [i, j], [j, words.length]];
+          var l3 = p3.map(function (r) { return join(r[0], r[1]); });
+          var m3 = Math.max.apply(null, l3.map(function (l) { return l.length; }));
+          if (m3 <= max && m3 < bestLongest) { bestLongest = m3; best = l3; }
+        }
+        continue;
+      }
+      var l2 = parts.map(function (r) { return join(r[0], r[1]); });
+      var m2 = Math.max(l2[0].length, l2[1].length);
+      if (m2 <= max && m2 < bestLongest) { bestLongest = m2; best = l2; }
+    }
+    return best || out;
   }
 
   function heroEl(tag, cls, text) {
@@ -2668,7 +2609,7 @@
       // (one calm line for most names, as in the lab).
       lines = heroSplitLines(up, 18);
       longest = lines.reduce(function (m, l) { return Math.max(m, l.length); }, 1);
-      w = longest * 1.15 + 0.5; // .5em tracking
+      w = longest * 1.3 + 0.5; // .5em tracking
       var words = up.split(" ").filter(function (x) { return /\p{L}/u.test(x); });
       var initials = words.slice(0, 2).map(function (x) { return x.match(/\p{L}/u)[0]; }).join("") || up.charAt(0);
       var mg = heroEl("span", "hi-mono");
@@ -2826,9 +2767,101 @@
     Array.prototype.forEach.call(c.querySelectorAll(".menu-group-count"), function (x) { x.parentNode.removeChild(x); });
     return c.textContent.replace(/\s+/g, " ").trim();
   }
-  function syncPricesDom(services) {
+  /**
+   * Back to the page's plain markup before the rows are compared with Bokningar. wireServiceGroups and wirePriceMenu ran
+   * on load, and a group's own row ("Klippning", "Herr") is no service, so the comparison removed it and the group's
+   * services stayed hidden: most of the price list vanished (Salong Storgatan 50, 2026-11-02). Both are wired again after.
+   */
+  function unwirePrices(root) {
+    Array.prototype.forEach.call(root.querySelectorAll(".service-group-row"), function (r) { r.parentNode.removeChild(r); });
+    Array.prototype.forEach.call(root.querySelectorAll(".service-group.sg-built"), function (g) {
+      g.classList.remove("sg-built");
+      Array.prototype.forEach.call(g.children, function (c) { c.hidden = false; c.classList.remove("service-variant"); });
+    });
+    Array.prototype.forEach.call(root.querySelectorAll(".menu-group"), function (g) {
+      g.hidden = false;
+      g.removeAttribute("role");
+      g.removeAttribute("aria-labelledby");
+      root.appendChild(g);
+    });
+    Array.prototype.forEach.call(root.querySelectorAll(".pm-menu, .pm-list"), function (el) { el.parentNode.removeChild(el); });
+    root.classList.remove("pm-enhanced", "pm-tabs", "pm-tint", "pm-plain", "pm-open", "pm-columns", "pm-stack");
+  }
+  /** The order set in Bokningar > Tjänster (2026-11-04), same rule as reorderNodes() in siteDataSync.ts: every level is
+   *  sorted by the first catalog service it holds, headings and notes stay where they are. */
+  function orderPricesDom(container, rankOf) {
+    var kids = Array.prototype.filter.call(container.children, function (el) { return rankOf(el) !== null; });
+    var sorted = kids.map(function (el, i) { return { el: el, r: rankOf(el), i: i }; }).sort(function (a, b) { return a.r - b.r || a.i - b.i; });
+    if (sorted.some(function (x, i) { return x.el !== kids[i]; })) {
+      var marks = kids.map(function (el) { var m = document.createComment(""); container.insertBefore(m, el); return m; });
+      kids.forEach(function (el) { container.removeChild(el); });
+      marks.forEach(function (m, i) { container.replaceChild(sorted[i].el, m); });
+    }
+    Array.prototype.forEach.call(container.children, function (el) { if (el.querySelectorAll(".price-item").length > 1) orderPricesDom(el, rankOf); });
+  }
+  /**
+   * The price list built from Bokningar > Tjänster (2026-11-07, Edwin: salons make their own undergrupper, like
+   * Balayage's Färg > Balayage > the balayage services). Same rule as regroupPriceList() in siteDataSync.ts: every
+   * category holds exactly its services in the catalog's order, each undergrupp as one .service-group (name, short
+   * line, its services) where its first service is, every other service a choice of its own; headings and notes stay.
+   */
+  function isChoice(el) { return el.classList.contains("service-group") || el.classList.contains("price-item"); }
+  function regroupPricesDom(root, services, groups) {
+    var byId = {};
+    groups.forEach(function (g) { byId[g.id] = g; });
+    var existing = Array.prototype.filter.call(root.children, function (el) { return el.classList.contains("menu-group"); });
+    var cats = [], byCat = {};
+    services.forEach(function (s) {
+      var cat = String(s.category || "").trim() || (existing.length === 1 ? groupLabel(existing[0]) : "Övrigt");
+      var k = cat.toLowerCase();
+      if (!byCat[k]) { byCat[k] = []; cats.push(cat); }
+      byCat[k].push(s);
+    });
+    var anchor = document.createComment("");
+    root.insertBefore(anchor, existing[0] || null);
+    existing.forEach(function (g) { root.removeChild(g); });
+    cats.forEach(function (cat) {
+      var el = existing.filter(function (g) { return groupLabel(g).toLowerCase() === cat.toLowerCase(); })[0];
+      if (!el) {
+        el = document.createElement("div");
+        el.className = "menu-group";
+        var h = document.createElement("h3");
+        h.textContent = cat;
+        el.appendChild(h);
+      }
+      var kids = Array.prototype.slice.call(el.children);
+      var mark = document.createComment("");
+      el.insertBefore(mark, kids.filter(isChoice)[0] || null);
+      kids.forEach(function (k) { if (isChoice(k)) el.removeChild(k); });
+      var open = {};
+      byCat[cat.toLowerCase()].forEach(function (s) {
+        var g = s.group_id ? byId[s.group_id] : null;
+        if (g && open[g.id]) { open[g.id].appendChild(priceItemEl(s)); return; }
+        var sg = document.createElement("div");
+        sg.className = "service-group";
+        var nm = document.createElement("span");
+        nm.className = "service-group-name";
+        nm.textContent = g ? g.name : s.name;
+        sg.appendChild(nm);
+        if (g && g.description) {
+          var d = document.createElement("span");
+          d.className = "service-group-desc";
+          d.textContent = g.description;
+          sg.appendChild(d);
+        }
+        sg.appendChild(priceItemEl(s));
+        el.insertBefore(sg, mark);
+        if (g) open[g.id] = sg;
+      });
+      el.removeChild(mark);
+      root.insertBefore(el, anchor);
+    });
+    root.removeChild(anchor);
+  }
+  function syncPricesDom(services, ordered, serviceGroups) {
     var root = document.querySelector(".menu-groups");
     if (!root) return;
+    unwirePrices(root);
     var byKey = {};
     services.forEach(function (s) { var k = normService(s.name); if (!byKey[k]) byKey[k] = s; });
     var seen = {};
@@ -2872,12 +2905,25 @@
       sg.appendChild(priceItemEl(s));
       target.appendChild(sg);
     });
+    if (serviceGroups) {
+      regroupPricesDom(root, services, serviceGroups);
+      groups = Array.prototype.filter.call(root.children, function (el) { return el.classList.contains("menu-group"); });
+    }
     groups.forEach(function (g) {
       var badge = g.querySelector(".menu-group-count");
       if (badge) badge.textContent = String(g.querySelectorAll(".price-item").length);
     });
     var note = root.previousElementSibling;
     if (note && note.classList.contains("price-example-note")) note.parentNode.removeChild(note);
+    if (ordered && !serviceGroups) {
+      var at = {};
+      services.forEach(function (s, i) { var k = normService(s.name); if (!(k in at)) at[k] = i; });
+      orderPricesDom(root, function (el) {
+        var best = null, names = el.classList.contains("price-item-name") ? [el] : el.querySelectorAll(".price-item-name");
+        Array.prototype.forEach.call(names, function (n) { var i = at[normService(n.textContent)]; if (i !== undefined && (best === null || i < best)) best = i; });
+        return best;
+      });
+    }
   }
   function syncTeamDom(team) {
     var block = document.querySelector(".team-block");
@@ -2903,7 +2949,7 @@
   }
   function applySiteData(data) {
     try { if (data.hours) syncHoursDom(data.hours); } catch (e) {}
-    try { if (data.services && data.services.length) syncPricesDom(data.services); } catch (e) {}
+    try { if (data.services && data.services.length) syncPricesDom(data.services, !!data.servicesOrdered, data.groups || null); } catch (e) {}
     try { if (data.team) syncTeamDom(data.team); } catch (e) {}
   }
 
@@ -2920,6 +2966,10 @@
   function init() {
     wireClosure();
     renderStars();
+    wireServiceGroups();
+    wirePriceMenu();
+    wireHoursList();
+    wireFaqMenu();
     wireReviewsBlock();
     wireFaqMenu();
     wireCountUp();
@@ -2939,7 +2989,6 @@
       wireServiceGroups();
       wirePriceMenu();
       wireHoursList();
-      wireNextAvailable();
       wireBooking();
 
       // The legacy always-visible calendar uses the shared #bdBackdrop confirm
